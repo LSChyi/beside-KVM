@@ -521,6 +521,35 @@
       }
     });
 
+    // -------------------------------------------------------------------------
+    // Camera Error Handling Helper
+    // -------------------------------------------------------------------------
+    function handleCameraError(err, context = 'Camera') {
+      console.error(`[KVM Video] ${context} error (${err.name}):`, err);
+      let title = 'Video Error';
+      let msg = err.message || 'An error occurred accessing the video device.';
+
+      if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+        title = 'No Video Device Found';
+        msg = 'No UVC capture card or camera detected. Please check the USB connection.';
+      } else if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError' || err.name === 'SecurityError') {
+        title = 'Camera Permission Denied';
+        msg = 'Please allow camera access permission in browser site settings.';
+      } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+        title = 'Video Device In Use';
+        msg = 'The video device could not be opened. It may be locked by another application.';
+      } else if (err.name === 'OverconstrainedError') {
+        title = 'Format Unsupported';
+        msg = `The device does not support the requested video format (${err.constraint || 'constraint'}).`;
+      } else if (err.name === 'AbortError') {
+        title = 'Device Access Aborted';
+        msg = 'The video connection attempt was aborted.';
+      }
+
+      showToast(title, msg);
+      return { title, msg };
+    }
+
     async function scanAndSelectCamera() {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         showToast('WebRTC Unsupported', 'Your browser does not support mediaDevices API.');
@@ -543,8 +572,7 @@
             devices = await navigator.mediaDevices.enumerateDevices();
             videoDevices = devices.filter(d => d.kind === 'videoinput');
           } catch (permErr) {
-            console.error('[KVM Video] Permission error:', permErr);
-            showToast('Camera Permission Required', 'Please allow camera access to scan available UVC capture devices.');
+            handleCameraError(permErr, 'Camera Scan');
             btnStartVideo.innerHTML = '<span>📹</span> Start Video Stream';
             btnStartVideo.disabled = false;
             return;
@@ -552,7 +580,7 @@
         }
 
         if (videoDevices.length === 0) {
-          showToast('No Video Devices Found', 'No UVC or camera devices detected. Check connection.');
+          showToast('No Video Device Found', 'No UVC capture card or camera detected. Please check the USB connection.');
           btnStartVideo.innerHTML = '<span>📹</span> Start Video Stream';
           btnStartVideo.disabled = false;
           return;
@@ -567,8 +595,7 @@
         // Multiple video devices: open the selection modal
         openDeviceModal(videoDevices);
       } catch (err) {
-        console.error('[KVM Video] Scan error:', err);
-        showToast('Scan Failed', err.message);
+        handleCameraError(err, 'Scan');
         btnStartVideo.innerHTML = '<span>📹</span> Start Video Stream';
         btnStartVideo.disabled = false;
       }
@@ -655,9 +682,8 @@
 
         console.log('[KVM Video] Stream started successfully on device:', deviceName);
       } catch (err) {
-        console.error('[KVM Video] Video connection error:', err);
-        showToast('Video Stream Failed', err.message);
-        stopVideo('Could not start video stream: ' + err.message);
+        const { msg } = handleCameraError(err, 'Connection');
+        stopVideo('Could not start video stream: ' + msg);
       } finally {
         btnStartVideo.innerHTML = '<span>📹</span> Start Video Stream';
         btnStartVideo.disabled = false;
