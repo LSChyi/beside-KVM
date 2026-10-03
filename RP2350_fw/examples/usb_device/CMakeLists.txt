@@ -4,6 +4,10 @@ add_executable(${target_name})
 pico_enable_stdio_usb(${target_name} 1) 
 pico_enable_stdio_uart(${target_name} 0) 
 
+target_compile_definitions(${target_name} PRIVATE
+  PICO_STDIO_USB_CONNECTION_WITHOUT_DTR=1
+)
+
 target_sources(${target_name} PRIVATE
   usb_device.c
 )

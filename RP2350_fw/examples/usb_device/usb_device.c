@@ -14,6 +14,7 @@
 // TinyUSB header to define USB descriptors & HID structures
 #include "device/usbd.h"
 #include "class/hid/hid_device.h"
+#include "class/cdc/cdc_device.h"
 
 static usb_device_t *usb_device = NULL;
 
@@ -133,10 +134,15 @@ static inline void kbd_queue_push(const hid_keyboard_report_t *report) {
   kbd_q_head = (kbd_q_head + 1) % KBD_QUEUE_SIZE;
 }
 
-static inline hid_keyboard_report_t kbd_queue_pop(void) {
-  hid_keyboard_report_t r = kbd_queue[kbd_q_tail];
-  kbd_q_tail = (kbd_q_tail + 1) % KBD_QUEUE_SIZE;
-  return r;
+static inline hid_keyboard_report_t *kbd_queue_peek(void) {
+  if (kbd_queue_empty()) return NULL;
+  return &kbd_queue[kbd_q_tail];
+}
+
+static inline void kbd_queue_drop(void) {
+  if (!kbd_queue_empty()) {
+    kbd_q_tail = (kbd_q_tail + 1) % KBD_QUEUE_SIZE;
+  }
 }
 
 // Mouse state
@@ -159,6 +165,9 @@ static uint8_t payload_idx = 0;
 static uint32_t last_rx_time = 0;
 
 static void handle_packet(uint8_t cmd, const uint8_t *payload) {
+  endpoint_t *ep_kb = pio_usb_device_get_endpoint_by_address(EPNUM_KEYBOARD);
+  endpoint_t *ep_mouse = pio_usb_device_get_endpoint_by_address(EPNUM_MOUSE);
+
   if (cmd == 0x01) {
     // Keyboard packet: [0x01, modifiers, reserved, keycode, keycode2]
     hid_keyboard_report_t report = {0};
@@ -167,6 +176,14 @@ static void handle_packet(uint8_t cmd, const uint8_t *payload) {
     report.keycode[0] = payload[2];
     report.keycode[1] = payload[3];
     kbd_queue_push(&report);
+
+    // Echo back to CDC
+    printf("[ECHO] KEY: code=0x%02X mod=0x%02X raw=[%02X %02X %02X %02X %02X] (ep_tx=%d, ep_busy=%d)\r\n",
+           payload[2], payload[0],
+           cmd, payload[0], payload[1], payload[2], payload[3],
+           ep_kb ? ep_kb->is_tx : 0,
+           ep_kb ? ep_kb->has_transfer : 0);
+    stdio_flush();
   } else if (cmd == 0x02) {
     // Mouse packet: [0x02, buttons, dx, dy, wheel]
     mouse_buttons = payload[0];
@@ -174,6 +191,14 @@ static void handle_packet(uint8_t cmd, const uint8_t *payload) {
     mouse_accum_y += (int8_t)payload[2];
     mouse_accum_wheel += (int8_t)payload[3];
     mouse_dirty = true;
+
+    // Echo back to CDC
+    printf("[ECHO] MOUSE: btn=0x%02X dx=%d dy=%d wheel=%d raw=[%02X %02X %02X %02X %02X] (ep_tx=%d, ep_busy=%d)\r\n",
+           payload[0], (int8_t)payload[1], (int8_t)payload[2], (int8_t)payload[3],
+           cmd, payload[0], payload[1], payload[2], payload[3],
+           ep_mouse ? ep_mouse->is_tx : 0,
+           ep_mouse ? ep_mouse->has_transfer : 0);
+    stdio_flush();
   }
 }
 
@@ -199,8 +224,10 @@ void core1_main(void) {
   sleep_ms(10);
 
   static pio_usb_configuration_t config = PIO_USB_DEFAULT_CONFIG;
+  gpio_pull_up(config.pin_dp);
   init_string_desc();
   usb_device = pio_usb_device_init(&config, &desc);
+  gpio_pull_up(config.pin_dp);
 
   while (true) {
     pio_usb_device_task();
@@ -218,25 +245,42 @@ int main(void) {
   // all PIO USB tasks run in core1
   multicore_launch_core1(core1_main);
 
-  while (usb_device == NULL) {
-    tight_loop_contents();
-  }
+  endpoint_t *ep_kb = pio_usb_device_get_endpoint_by_address(EPNUM_KEYBOARD);
+  endpoint_t *ep_mouse = pio_usb_device_get_endpoint_by_address(EPNUM_MOUSE);
 
-  endpoint_t *ep_kb = pio_usb_get_endpoint(usb_device, 1);
-  endpoint_t *ep_mouse = pio_usb_get_endpoint(usb_device, 2);
+  uint32_t last_heartbeat_time = 0;
+  bool target_configured_notified = false;
 
-  uint32_t kb_last_tx_time = 0;
-  uint32_t mouse_last_tx_time = 0;
+  printf("\r\n[FW_BOOT] RP2350 HID Forwarder ready at 180MHz\r\n");
+  stdio_flush();
 
   while (true) {
     uint32_t now = to_ms_since_boot(get_absolute_time());
 
-    // Recover if endpoint transfer timed out (> 50ms)
-    if (ep_kb && ep_kb->has_transfer && (now - kb_last_tx_time > 50)) {
-      pio_usb_ll_transfer_complete(ep_kb, PIO_USB_INTS_ENDPOINT_ERROR_BITS);
+    // 1-second periodic heartbeat
+    if (now - last_heartbeat_time >= 1000) {
+      last_heartbeat_time = now;
+      printf("[FW_STATUS] heartbeat (uptime=%us, ready=%d, dtr=%d, pio_ready=%d, resets=%lu, setups=%lu, set_cfg=%lu, last_req=0x%02X)\r\n",
+             (unsigned int)(now / 1000),
+             tud_ready(),
+             tud_cdc_connected(),
+             (ep_kb && ep_kb->is_tx) ? 1 : 0,
+             (unsigned long)pio_usb_debug_bus_resets,
+             (unsigned long)pio_usb_debug_setups,
+             (unsigned long)pio_usb_debug_set_configs,
+             pio_usb_debug_last_req);
+      stdio_flush();
     }
-    if (ep_mouse && ep_mouse->has_transfer && (now - mouse_last_tx_time > 50)) {
-      pio_usb_ll_transfer_complete(ep_mouse, PIO_USB_INTS_ENDPOINT_ERROR_BITS);
+
+    // Connection state notification
+    if (ep_kb && ep_kb->is_tx && !target_configured_notified) {
+      printf("[FW_STATUS] Target PC configured HID endpoints successfully! (ep_kb=0x%p)\r\n", ep_kb);
+      stdio_flush();
+      target_configured_notified = true;
+    } else if (ep_kb && !ep_kb->is_tx && target_configured_notified) {
+      printf("[FW_WARN] Target PC bus reset / disconnected!\r\n");
+      stdio_flush();
+      target_configured_notified = false;
     }
 
     // Reset parser if partial packet timed out (> 100ms)
@@ -253,16 +297,18 @@ int main(void) {
       process_serial_byte((uint8_t)ch);
     }
 
-    // Forward keyboard events
-    if (!kbd_queue_empty() && ep_kb && !ep_kb->has_transfer) {
-      hid_keyboard_report_t r = kbd_queue_pop();
-      if (pio_usb_set_out_data(ep_kb, (const uint8_t *)&r, sizeof(r)) == 0) {
-        kb_last_tx_time = now;
+    // Forward keyboard events (only pop from queue when transmission succeeds)
+    if (!kbd_queue_empty() && ep_kb && ep_kb->is_tx && !ep_kb->has_transfer) {
+      hid_keyboard_report_t *r = kbd_queue_peek();
+      if (pio_usb_set_out_data(ep_kb, (const uint8_t *)r, sizeof(*r)) == 0) {
+        printf("[FW_STATUS] HID KB sent to target: code=0x%02X mod=0x%02X\r\n", r->keycode[0], r->modifier);
+        stdio_flush();
+        kbd_queue_drop();
       }
     }
 
-    // Forward mouse events
-    if (mouse_dirty && ep_mouse && !ep_mouse->has_transfer) {
+    // Forward mouse events (only subtract accumulator when transmission succeeds)
+    if (mouse_dirty && ep_mouse && ep_mouse->is_tx && !ep_mouse->has_transfer) {
       hid_mouse_report_t r = {0};
       r.buttons = mouse_buttons;
 
@@ -270,26 +316,24 @@ int main(void) {
       if (send_x > 127) send_x = 127;
       else if (send_x < -127) send_x = -127;
       r.x = (int8_t)send_x;
-      mouse_accum_x -= send_x;
 
       int32_t send_y = mouse_accum_y;
       if (send_y > 127) send_y = 127;
       else if (send_y < -127) send_y = -127;
       r.y = (int8_t)send_y;
-      mouse_accum_y -= send_y;
 
       int32_t send_wheel = mouse_accum_wheel;
       if (send_wheel > 127) send_wheel = 127;
       else if (send_wheel < -127) send_wheel = -127;
       r.wheel = (int8_t)send_wheel;
-      mouse_accum_wheel -= send_wheel;
-
-      if (mouse_accum_x == 0 && mouse_accum_y == 0 && mouse_accum_wheel == 0) {
-        mouse_dirty = false;
-      }
 
       if (pio_usb_set_out_data(ep_mouse, (const uint8_t *)&r, sizeof(r)) == 0) {
-        mouse_last_tx_time = now;
+        mouse_accum_x -= send_x;
+        mouse_accum_y -= send_y;
+        mouse_accum_wheel -= send_wheel;
+        if (mouse_accum_x == 0 && mouse_accum_y == 0 && mouse_accum_wheel == 0) {
+          mouse_dirty = false;
+        }
       }
     }
   }

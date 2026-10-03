@@ -5,8 +5,10 @@
   <title>Browser IP-KVM Console</title>
   <style>
     body { margin: 0; background: #111; color: #eee; font-family: monospace; overflow: hidden; }
-    #toolbar { padding: 8px; background: #222; display: flex; gap: 10px; }
+    #toolbar { padding: 8px; background: #222; display: flex; gap: 10px; align-items: center; }
     #viewport { width: 100vw; height: calc(100vh - 45px); object-fit: contain; background: #000; cursor: crosshair; }
+    #status { color: #aaa; }
+    #echo-status { color: #4ade80; margin-left: auto; max-width: 50%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; }
   </style>
 </head>
 <body>
@@ -14,6 +16,7 @@
     <button id="btnConnectSerial">Connect RP2350 Serial</button>
     <button id="btnStartVideo">Start Video Stream</button>
     <span id="status">Status: Disconnected</span>
+    <span id="echo-status"></span>
   </div>
   <video id="viewport" autoplay playsinline muted></video>
 
@@ -21,6 +24,7 @@
     let port, writer;
     const videoEl = document.getElementById('viewport');
     const statusEl = document.getElementById('status');
+    const echoStatusEl = document.getElementById('echo-status');
 
     // 1. UVC Video Capture
     document.getElementById('btnStartVideo').addEventListener('click', async () => {
@@ -34,26 +38,66 @@
           audio: false
         });
         videoEl.srcObject = stream;
+        console.log('[KVM Video] Stream started successfully');
       } catch (err) {
-        console.error('Video stream error:', err);
+        console.error('[KVM Video] Video stream error:', err);
       }
     });
 
-    // 2. Web Serial Setup
+    // 2. Web Serial Setup & Echo Reader
+    async function startReading() {
+      if (!port || !port.readable) return;
+      const textDecoder = new TextDecoder();
+      let rxBuffer = '';
+      try {
+        const reader = port.readable.getReader();
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          if (value) {
+            rxBuffer += textDecoder.decode(value, { stream: true });
+            const lines = rxBuffer.split(/\r?\n/);
+            rxBuffer = lines.pop(); // keep partial line for next chunk
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (trimmed.length > 0) {
+                console.log('%c[RP2350 Echo]', 'color: #00ffaa; font-weight: bold;', trimmed);
+                if (echoStatusEl) {
+                  echoStatusEl.textContent = 'Echo: ' + trimmed;
+                }
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error('[KVM Serial] Read loop error:', err);
+      }
+    }
+
     document.getElementById('btnConnectSerial').addEventListener('click', async () => {
       try {
         port = await navigator.serial.requestPort();
         await port.open({ baudRate: 115200 });
+        try {
+          await port.setSignals({ dataTerminalReady: true, requestToSend: true });
+        } catch (sigErr) {
+          console.warn('[KVM Serial] Could not set DTR/RTS signals:', sigErr);
+        }
         writer = port.writable.getWriter();
         statusEl.textContent = 'Status: Connected to RP2350';
+        console.log('[KVM Serial] Connected to RP2350');
+        startReading();
       } catch (err) {
-        console.error('Serial connection error:', err);
+        console.error('[KVM Serial] Connection error:', err);
       }
     });
 
     // Helper: Send Serial Packet
     async function sendPacket(bytes) {
-      if (!writer) return;
+      if (!writer) {
+        console.warn('[KVM Serial] Cannot send: RP2350 not connected.');
+        return;
+      }
       await writer.write(new Uint8Array(bytes));
     }
 
@@ -63,6 +107,7 @@
       if (navigator.keyboard && navigator.keyboard.lock) {
         navigator.keyboard.lock(['Escape', 'AltLeft', 'AltRight', 'Tab']);
       }
+      console.log('[KVM] Viewport locked for HID input forwarding');
     });
 
     window.addEventListener('mousemove', (e) => {
@@ -70,24 +115,61 @@
       const dx = Math.max(-127, Math.min(127, e.movementX));
       const dy = Math.max(-127, Math.min(127, e.movementY));
       // Packet: [0x02, buttons, dx, dy, wheel]
-      sendPacket([0x02, e.buttons, dx & 0xFF, dy & 0xFF, 0x00]);
+      const packet = [0x02, e.buttons, dx & 0xFF, dy & 0xFF, 0x00];
+      sendPacket(packet);
     });
 
     window.addEventListener('mousedown', (e) => {
       if (document.pointerLockElement !== videoEl) return;
-      sendPacket([0x02, e.buttons, 0x00, 0x00, 0x00]);
+      const packet = [0x02, e.buttons, 0x00, 0x00, 0x00];
+      console.log('[KVM MouseDown] buttons=' + e.buttons, packet);
+      sendPacket(packet);
     });
 
     window.addEventListener('mouseup', (e) => {
       if (document.pointerLockElement !== videoEl) return;
-      sendPacket([0x02, e.buttons, 0x00, 0x00, 0x00]);
+      const packet = [0x02, e.buttons, 0x00, 0x00, 0x00];
+      console.log('[KVM MouseUp] buttons=' + e.buttons, packet);
+      sendPacket(packet);
+    });
+
+    window.addEventListener('wheel', (e) => {
+      if (document.pointerLockElement !== videoEl) return;
+      const wheelDelta = e.deltaY < 0 ? 1 : (e.deltaY > 0 ? -1 : 0);
+      const packet = [0x02, e.buttons, 0x00, 0x00, wheelDelta & 0xFF];
+      console.log('[KVM Wheel] wheelDelta=' + wheelDelta, packet);
+      sendPacket(packet);
     });
 
     // 4. Keyboard Translation (USB HID Scancodes)
     const KEY_MAP = {
+      // Letters A-Z
       'KeyA': 0x04, 'KeyB': 0x05, 'KeyC': 0x06, 'KeyD': 0x07,
-      'Digit1': 0x1E, 'Digit2': 0x1F, 'Enter': 0x28, 'Escape': 0x29,
-      'Backspace': 0x2A, 'Tab': 0x2B, 'Space': 0x2C
+      'KeyE': 0x08, 'KeyF': 0x09, 'KeyG': 0x0A, 'KeyH': 0x0B,
+      'KeyI': 0x0C, 'KeyJ': 0x0D, 'KeyK': 0x0E, 'KeyL': 0x0F,
+      'KeyM': 0x10, 'KeyN': 0x11, 'KeyO': 0x12, 'KeyP': 0x13,
+      'KeyQ': 0x14, 'KeyR': 0x15, 'KeyS': 0x16, 'KeyT': 0x17,
+      'KeyU': 0x18, 'KeyV': 0x19, 'KeyW': 0x1A, 'KeyX': 0x1B,
+      'KeyY': 0x1C, 'KeyZ': 0x1D,
+      // Digits 1-0
+      'Digit1': 0x1E, 'Digit2': 0x1F, 'Digit3': 0x20, 'Digit4': 0x21,
+      'Digit5': 0x22, 'Digit6': 0x23, 'Digit7': 0x24, 'Digit8': 0x25,
+      'Digit9': 0x26, 'Digit0': 0x27,
+      // Common controls
+      'Enter': 0x28, 'Escape': 0x29, 'Backspace': 0x2A, 'Tab': 0x2B, 'Space': 0x2C,
+      'Minus': 0x2D, 'Equal': 0x2E, 'BracketLeft': 0x2F, 'BracketRight': 0x30,
+      'Backslash': 0x31, 'Semicolon': 0x33, 'Quote': 0x34, 'Backquote': 0x35,
+      'Comma': 0x36, 'Period': 0x37, 'Slash': 0x38, 'CapsLock': 0x39,
+      // Function keys
+      'F1': 0x3A, 'F2': 0x3B, 'F3': 0x3C, 'F4': 0x3D,
+      'F5': 0x3E, 'F6': 0x3F, 'F7': 0x40, 'F8': 0x41,
+      'F9': 0x42, 'F10': 0x43, 'F11': 0x44, 'F12': 0x45,
+      // Navigation
+      'PrintScreen': 0x46, 'ScrollLock': 0x47, 'Pause': 0x48,
+      'Insert': 0x49, 'Home': 0x4A, 'PageUp': 0x4B,
+      'Delete': 0x4C, 'End': 0x4D, 'PageDown': 0x4E,
+      // Arrows
+      'ArrowRight': 0x4F, 'ArrowLeft': 0x50, 'ArrowDown': 0x51, 'ArrowUp': 0x52
     };
 
     function getModifiers(e) {
@@ -100,16 +182,30 @@
     }
 
     window.addEventListener('keydown', (e) => {
-      if (document.pointerLockElement !== videoEl) return;
+      if (document.pointerLockElement !== videoEl) {
+        console.warn(`[KVM] Ignored keydown "${e.code}": video viewport is not focused/locked. Click the video stream to forward inputs.`);
+        return;
+      }
       e.preventDefault();
       const code = KEY_MAP[e.code] || 0x00;
-      sendPacket([0x01, getModifiers(e), 0x00, code, 0x00]);
+      const mod = getModifiers(e);
+      const packet = [0x01, mod, 0x00, code, 0x00];
+      console.log(`%c[KVM KeyDown Sent]`, 'color: #38bdf8; font-weight: bold;',
+        `code="${e.code}" key="${e.key}" scancode=0x${code.toString(16).padStart(2, '0')} mod=0x${mod.toString(16).padStart(2, '0')}`,
+        packet);
+      sendPacket(packet);
     });
 
     window.addEventListener('keyup', (e) => {
       if (document.pointerLockElement !== videoEl) return;
       e.preventDefault();
-      sendPacket([0x01, getModifiers(e), 0x00, 0x00, 0x00]);
+      const code = KEY_MAP[e.code] || 0x00;
+      const mod = getModifiers(e);
+      const packet = [0x01, mod, 0x00, 0x00, 0x00];
+      console.log(`%c[KVM KeyUp Sent]`, 'color: #818cf8; font-weight: bold;',
+        `code="${e.code}" key="${e.key}" released (mod=0x${mod.toString(16).padStart(2, '0')})`,
+        packet);
+      sendPacket(packet);
     });
   </script>
 </body>
