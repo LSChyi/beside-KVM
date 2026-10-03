@@ -2,6 +2,8 @@
 
 [Try it out here](https://lschyi.github.io/beside-KVM/)
 
+![](image.jpg)
+
 This is a web based KVM solution. Just like other IP-KVMs, you have a laptop
 that has a screen display contents, has a keyboard/mouse for interacting the
 system.
