@@ -165,9 +165,6 @@ static uint8_t payload_idx = 0;
 static uint32_t last_rx_time = 0;
 
 static void handle_packet(uint8_t cmd, const uint8_t *payload) {
-  endpoint_t *ep_kb = pio_usb_device_get_endpoint_by_address(EPNUM_KEYBOARD);
-  endpoint_t *ep_mouse = pio_usb_device_get_endpoint_by_address(EPNUM_MOUSE);
-
   if (cmd == 0x01) {
     // Keyboard packet: [0x01, modifiers, reserved, keycode, keycode2]
     hid_keyboard_report_t report = {0};
@@ -176,14 +173,6 @@ static void handle_packet(uint8_t cmd, const uint8_t *payload) {
     report.keycode[0] = payload[2];
     report.keycode[1] = payload[3];
     kbd_queue_push(&report);
-
-    // Echo back to CDC
-    printf("[ECHO] KEY: code=0x%02X mod=0x%02X raw=[%02X %02X %02X %02X %02X] (ep_tx=%d, ep_busy=%d)\r\n",
-           payload[2], payload[0],
-           cmd, payload[0], payload[1], payload[2], payload[3],
-           ep_kb ? ep_kb->is_tx : 0,
-           ep_kb ? ep_kb->has_transfer : 0);
-    stdio_flush();
   } else if (cmd == 0x02) {
     // Mouse packet: [0x02, buttons, dx, dy, wheel]
     mouse_buttons = payload[0];
@@ -191,14 +180,6 @@ static void handle_packet(uint8_t cmd, const uint8_t *payload) {
     mouse_accum_y += (int8_t)payload[2];
     mouse_accum_wheel += (int8_t)payload[3];
     mouse_dirty = true;
-
-    // Echo back to CDC
-    printf("[ECHO] MOUSE: btn=0x%02X dx=%d dy=%d wheel=%d raw=[%02X %02X %02X %02X %02X] (ep_tx=%d, ep_busy=%d)\r\n",
-           payload[0], (int8_t)payload[1], (int8_t)payload[2], (int8_t)payload[3],
-           cmd, payload[0], payload[1], payload[2], payload[3],
-           ep_mouse ? ep_mouse->is_tx : 0,
-           ep_mouse ? ep_mouse->has_transfer : 0);
-    stdio_flush();
   }
 }
 
@@ -301,8 +282,6 @@ int main(void) {
     if (!kbd_queue_empty() && ep_kb && ep_kb->is_tx && !ep_kb->has_transfer) {
       hid_keyboard_report_t *r = kbd_queue_peek();
       if (pio_usb_set_out_data(ep_kb, (const uint8_t *)r, sizeof(*r)) == 0) {
-        printf("[FW_STATUS] HID KB sent to target: code=0x%02X mod=0x%02X\r\n", r->keycode[0], r->modifier);
-        stdio_flush();
         kbd_queue_drop();
       }
     }

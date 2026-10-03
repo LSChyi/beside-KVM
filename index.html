@@ -368,8 +368,6 @@
       <span id="kvmLockIcon">🎮</span>
       <span id="kvmLockText">Click video to focus KVM</span>
     </div>
-
-    <span id="echo-status"></span>
   </div>
 
   <!-- Device Selection Modal -->
@@ -394,7 +392,6 @@
     let currentStream = null;
 
     const videoEl = document.getElementById('viewport');
-    const echoStatusEl = document.getElementById('echo-status');
 
     // UI Elements
     const btnConnectSerial = document.getElementById('btnConnectSerial');
@@ -753,10 +750,6 @@
                   serialStatusText.textContent = 'RP2350: Ready (Target PC OK)';
                 } else if (trimmed.includes('Target PC bus reset')) {
                   serialStatusText.textContent = 'RP2350: Connected (Target Reset)';
-                }
-
-                if (echoStatusEl) {
-                  echoStatusEl.textContent = 'Echo: ' + trimmed;
                 }
               }
             }
