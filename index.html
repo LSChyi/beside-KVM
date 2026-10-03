@@ -59,6 +59,132 @@
       transform: scale(0.98);
     }
 
+    /* Modal Backdrop and Dialog */
+    .modal-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(4px);
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+    .modal-backdrop.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .modal-dialog {
+      background: #181b24;
+      border: 1px solid #2e3446;
+      border-radius: 12px;
+      padding: 20px;
+      width: 460px;
+      max-width: 90vw;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+      transform: scale(0.95);
+      transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .modal-backdrop.open .modal-dialog {
+      transform: scale(1);
+    }
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .modal-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #f1f5f9;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .modal-desc {
+      font-size: 13px;
+      color: #94a3b8;
+      margin-bottom: 16px;
+      line-height: 1.4;
+    }
+    .device-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 280px;
+      overflow-y: auto;
+      margin-bottom: 16px;
+    }
+    .device-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 11px 14px;
+      background: #222634;
+      border: 1px solid #33394c;
+      border-radius: 8px;
+      color: #e2e8f0;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      text-align: left;
+    }
+    .device-item:hover {
+      background: #2d3345;
+      border-color: #6366f1;
+      color: #fff;
+    }
+    .device-item.recommended {
+      border-color: rgba(99, 102, 241, 0.6);
+      background: rgba(99, 102, 241, 0.12);
+    }
+    .device-name {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .badge-rec {
+      font-size: 10px;
+      text-transform: uppercase;
+      padding: 2px 7px;
+      background: #4f46e5;
+      color: #fff;
+      border-radius: 4px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      flex-shrink: 0;
+    }
+    .modal-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+    .btn-cancel {
+      background: transparent;
+      color: #94a3b8;
+      border: 1px solid #3b4256;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-cancel:hover {
+      background: #252a38;
+      color: #fff;
+    }
+
     .status-badge {
       display: inline-flex;
       align-items: center;
@@ -246,6 +372,21 @@
     <span id="echo-status"></span>
   </div>
 
+  <!-- Device Selection Modal -->
+  <div id="videoModalBackdrop" class="modal-backdrop">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div class="modal-title"><span>📹</span> Select Video Device (UVC)</div>
+        <button id="btnModalClose" class="btn-icon" title="Close">✕</button>
+      </div>
+      <div class="modal-desc">Select the video input / UVC capture card you would like to stream:</div>
+      <div id="deviceListContainer" class="device-list"></div>
+      <div class="modal-footer">
+        <button id="btnModalCancel" class="btn-cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <video id="viewport" autoplay playsinline muted></video>
 
   <script>
@@ -265,6 +406,11 @@
     const videoStatusBadge = document.getElementById('videoStatusBadge');
     const videoStatusText = document.getElementById('videoStatusText');
     const btnStopVideo = document.getElementById('btnStopVideo');
+
+    const videoModalBackdrop = document.getElementById('videoModalBackdrop');
+    const deviceListContainer = document.getElementById('deviceListContainer');
+    const btnModalClose = document.getElementById('btnModalClose');
+    const btnModalCancel = document.getElementById('btnModalCancel');
 
     const kvmIndicator = document.getElementById('kvmIndicator');
     const kvmLockText = document.getElementById('kvmLockText');
@@ -338,46 +484,183 @@
     }
 
     // -------------------------------------------------------------------------
-    // 1. UVC Video Capture & Hooks
+    // 1. UVC Video Capture, On-Demand Scanning & Device Selection Modal
     // -------------------------------------------------------------------------
-    async function startVideo() {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
-            frameRate: { ideal: 60 }
-          },
-          audio: false
+    function openDeviceModal(devices) {
+      deviceListContainer.innerHTML = '';
+
+      devices.forEach((device, index) => {
+        const isUvc = /usb|uvc|capture|cam link|hdmi/i.test(device.label);
+        const item = document.createElement('button');
+        item.className = 'device-item' + (isUvc ? ' recommended' : '');
+        item.innerHTML = `
+          <span class="device-name">📹 ${device.label || ('Video Device ' + (index + 1))}</span>
+          ${isUvc ? '<span class="badge-rec">UVC Capture</span>' : ''}
+        `;
+        item.addEventListener('click', () => {
+          closeDeviceModal();
+          connectCamera(device.deviceId, device.label);
         });
+        deviceListContainer.appendChild(item);
+      });
+
+      videoModalBackdrop.classList.add('open');
+    }
+
+    function closeDeviceModal() {
+      videoModalBackdrop.classList.remove('open');
+      btnStartVideo.innerHTML = '<span>📹</span> Start Video Stream';
+      btnStartVideo.disabled = false;
+    }
+
+    btnModalClose.addEventListener('click', closeDeviceModal);
+    btnModalCancel.addEventListener('click', closeDeviceModal);
+    videoModalBackdrop.addEventListener('click', (e) => {
+      if (e.target === videoModalBackdrop) {
+        closeDeviceModal();
+      }
+    });
+
+    async function scanAndSelectCamera() {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        showToast('WebRTC Unsupported', 'Your browser does not support mediaDevices API.');
+        return;
+      }
+
+      btnStartVideo.innerHTML = '<span>⏳</span> Scanning devices...';
+      btnStartVideo.disabled = true;
+
+      try {
+        let devices = await navigator.mediaDevices.enumerateDevices();
+        let videoDevices = devices.filter(d => d.kind === 'videoinput');
+
+        // If labels are empty, prompt camera permission once to unlock hardware names
+        if (videoDevices.length === 0 || !videoDevices[0].label) {
+          try {
+            const tempStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+            tempStream.getTracks().forEach(t => t.stop());
+            await new Promise(r => setTimeout(r, 100));
+            devices = await navigator.mediaDevices.enumerateDevices();
+            videoDevices = devices.filter(d => d.kind === 'videoinput');
+          } catch (permErr) {
+            console.error('[KVM Video] Permission error:', permErr);
+            showToast('Camera Permission Required', 'Please allow camera access to scan available UVC capture devices.');
+            btnStartVideo.innerHTML = '<span>📹</span> Start Video Stream';
+            btnStartVideo.disabled = false;
+            return;
+          }
+        }
+
+        if (videoDevices.length === 0) {
+          showToast('No Video Devices Found', 'No UVC or camera devices detected. Check connection.');
+          btnStartVideo.innerHTML = '<span>📹</span> Start Video Stream';
+          btnStartVideo.disabled = false;
+          return;
+        }
+
+        // If only 1 video device is found, directly connect to it
+        if (videoDevices.length === 1) {
+          await connectCamera(videoDevices[0].deviceId, videoDevices[0].label);
+          return;
+        }
+
+        // Multiple video devices: open the selection modal
+        openDeviceModal(videoDevices);
+      } catch (err) {
+        console.error('[KVM Video] Scan error:', err);
+        showToast('Scan Failed', err.message);
+        btnStartVideo.innerHTML = '<span>📹</span> Start Video Stream';
+        btnStartVideo.disabled = false;
+      }
+    }
+
+    async function connectCamera(deviceId, label) {
+      try {
+        if (currentStream) {
+          currentStream.getTracks().forEach(t => t.stop());
+          currentStream = null;
+          await new Promise(r => setTimeout(r, 80));
+        }
+
+        // Fallback constraint tiers to handle device-specific capabilities without OverconstrainedError
+        const constraintTiers = [
+          // Tier 1: Targeted device with ideal 1080p
+          {
+            video: {
+              deviceId: deviceId ? { exact: deviceId } : undefined,
+              width: { ideal: 1920 },
+              height: { ideal: 1080 }
+            },
+            audio: false
+          },
+          // Tier 2: Targeted device with native resolution
+          {
+            video: {
+              deviceId: deviceId ? { exact: deviceId } : undefined
+            },
+            audio: false
+          },
+          // Tier 3: Relaxed ideal deviceId
+          {
+            video: {
+              deviceId: deviceId ? { ideal: deviceId } : undefined
+            },
+            audio: false
+          },
+          // Tier 4: Fallback to any default video device
+          {
+            video: true,
+            audio: false
+          }
+        ];
+
+        let stream = null;
+        let lastErr = null;
+
+        for (const constraints of constraintTiers) {
+          try {
+            stream = await navigator.mediaDevices.getUserMedia(constraints);
+            if (stream) break;
+          } catch (err) {
+            lastErr = err;
+            console.warn('[KVM Video] Constraint attempt failed:', err.name, err.constraint || '', constraints);
+          }
+        }
+
+        if (!stream) {
+          throw lastErr || new Error('Could not acquire video stream');
+        }
 
         currentStream = stream;
         videoEl.srcObject = stream;
 
         const videoTrack = stream.getVideoTracks()[0];
         const settings = videoTrack.getSettings ? videoTrack.getSettings() : {};
+        const deviceName = label ? label.split('(')[0].trim() : (videoTrack.label ? videoTrack.label.split('(')[0].trim() : 'Video');
         const resText = settings.width && settings.height ? ` (${settings.width}x${settings.height})` : '';
-        updateVideoUI(true, `Video: Active${resText}`);
 
-        // Hook: Listen for stream track ending (e.g. UVC device unplugged)
+        updateVideoUI(true, `${deviceName}: Active${resText}`);
+
         videoTrack.addEventListener('ended', () => {
           console.log('[KVM Video] Track ended (camera unplugged or stream stopped)');
           stopVideo('UVC capture device unplugged or stream terminated.');
         });
 
-        // Hook: Listen for track mute/unmute
         videoTrack.addEventListener('mute', () => {
-          updateVideoUI(true, 'Video: Muted/Waiting');
+          updateVideoUI(true, `${deviceName}: Muted/Waiting`);
         });
         videoTrack.addEventListener('unmute', () => {
-          updateVideoUI(true, `Video: Active${resText}`);
+          updateVideoUI(true, `${deviceName}: Active${resText}`);
         });
 
-        console.log('[KVM Video] Stream started successfully');
+        console.log('[KVM Video] Stream started successfully on device:', deviceName);
       } catch (err) {
-        console.error('[KVM Video] Video stream error:', err);
+        console.error('[KVM Video] Video connection error:', err);
         showToast('Video Stream Failed', err.message);
         stopVideo('Could not start video stream: ' + err.message);
+      } finally {
+        btnStartVideo.innerHTML = '<span>📹</span> Start Video Stream';
+        btnStartVideo.disabled = false;
       }
     }
 
@@ -395,7 +678,7 @@
       console.log('[KVM Video] Stream stopped:', reason || 'Normal');
     }
 
-    btnStartVideo.addEventListener('click', startVideo);
+    btnStartVideo.addEventListener('click', scanAndSelectCamera);
     btnStopVideo.addEventListener('click', () => stopVideo('Video stream stopped by user.'));
 
     // Hook: Listen for global media devices changes (plug/unplug)
