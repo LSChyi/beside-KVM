@@ -6,6 +6,7 @@ This is a web based KVM solution. Just like other IP-KVMs, you have a laptop tha
 You can view another PC's screen from your laptop, use the keyboard/mouse connect on your laptop to control another PC.
 Unlike the IP-KVMs, you will need WiFi/Ethernet cable connect to the IP-KVM, also another power supply for the IP-KVM, you just connect 2 USB devices to your laptop.
 
+```
  ┌────────────────────────────────────────────────────────┐
  │                         Laptop.                        │
  │  ┌──────────────────────────────────────────────────┐  │
@@ -24,3 +25,4 @@ Unlike the IP-KVMs, you will need WiFi/Ethernet cable connect to the IP-KVM, als
  ┌────────────────────────────────────────────────────────┐
  │                      Target PC                         │
  └────────────────────────────────────────────────────────┘
+```
