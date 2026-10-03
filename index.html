@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Browser IP-KVM Console</title>
+  <style>
+    body { margin: 0; background: #111; color: #eee; font-family: monospace; overflow: hidden; }
+    #toolbar { padding: 8px; background: #222; display: flex; gap: 10px; }
+    #viewport { width: 100vw; height: calc(100vh - 45px); object-fit: contain; background: #000; cursor: crosshair; }
+  </style>
+</head>
+<body>
+  <div id="toolbar">
+    <button id="btnConnectSerial">Connect RP2350 Serial</button>
+    <button id="btnStartVideo">Start Video Stream</button>
+    <span id="status">Status: Disconnected</span>
+  </div>
+  <video id="viewport" autoplay playsinline muted></video>
+
+  <script>
+    let port, writer;
+    const videoEl = document.getElementById('viewport');
+    const statusEl = document.getElementById('status');
+
+    // 1. UVC Video Capture
+    document.getElementById('btnStartVideo').addEventListener('click', async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+            frameRate: { ideal: 60 }
+          },
+          audio: false
+        });
+        videoEl.srcObject = stream;
+      } catch (err) {
+        console.error('Video stream error:', err);
+      }
+    });
+
+    // 2. Web Serial Setup
+    document.getElementById('btnConnectSerial').addEventListener('click', async () => {
+      try {
+        port = await navigator.serial.requestPort();
+        await port.open({ baudRate: 115200 });
+        writer = port.writable.getWriter();
+        statusEl.textContent = 'Status: Connected to RP2350';
+      } catch (err) {
+        console.error('Serial connection error:', err);
+      }
+    });
+
+    // Helper: Send Serial Packet
+    async function sendPacket(bytes) {
+      if (!writer) return;
+      await writer.write(new Uint8Array(bytes));
+    }
+
+    // 3. Pointer Lock & Mouse Handling
+    videoEl.addEventListener('click', () => {
+      videoEl.requestPointerLock();
+      if (navigator.keyboard && navigator.keyboard.lock) {
+        navigator.keyboard.lock(['Escape', 'AltLeft', 'AltRight', 'Tab']);
+      }
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (document.pointerLockElement !== videoEl) return;
+      const dx = Math.max(-127, Math.min(127, e.movementX));
+      const dy = Math.max(-127, Math.min(127, e.movementY));
+      // Packet: [0x02, buttons, dx, dy, wheel]
+      sendPacket([0x02, e.buttons, dx & 0xFF, dy & 0xFF, 0x00]);
+    });
+
+    window.addEventListener('mousedown', (e) => {
+      if (document.pointerLockElement !== videoEl) return;
+      sendPacket([0x02, e.buttons, 0x00, 0x00, 0x00]);
+    });
+
+    window.addEventListener('mouseup', (e) => {
+      if (document.pointerLockElement !== videoEl) return;
+      sendPacket([0x02, e.buttons, 0x00, 0x00, 0x00]);
+    });
+
+    // 4. Keyboard Translation (USB HID Scancodes)
+    const KEY_MAP = {
+      'KeyA': 0x04, 'KeyB': 0x05, 'KeyC': 0x06, 'KeyD': 0x07,
+      'Digit1': 0x1E, 'Digit2': 0x1F, 'Enter': 0x28, 'Escape': 0x29,
+      'Backspace': 0x2A, 'Tab': 0x2B, 'Space': 0x2C
+    };
+
+    function getModifiers(e) {
+      let mask = 0;
+      if (e.ctrlKey) mask |= 0x01;
+      if (e.shiftKey) mask |= 0x02;
+      if (e.altKey) mask |= 0x04;
+      if (e.metaKey) mask |= 0x08;
+      return mask;
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (document.pointerLockElement !== videoEl) return;
+      e.preventDefault();
+      const code = KEY_MAP[e.code] || 0x00;
+      sendPacket([0x01, getModifiers(e), 0x00, code, 0x00]);
+    });
+
+    window.addEventListener('keyup', (e) => {
+      if (document.pointerLockElement !== videoEl) return;
+      e.preventDefault();
+      sendPacket([0x01, getModifiers(e), 0x00, 0x00, 0x00]);
+    });
+  </script>
+</body>
+</html>
