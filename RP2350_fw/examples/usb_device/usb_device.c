@@ -209,7 +209,7 @@ void core1_main(void) {
 
 int main(void) {
   // default 125MHz is not appropriate. Sysclock should be multiple of 12MHz.
-  set_sys_clock_khz(120000, true);
+  set_sys_clock_khz(180000, true);
 
   stdio_init_all();
   stdio_set_translate_crlf(&stdio_usb, false);
