@@ -4,30 +4,343 @@
   <meta charset="UTF-8">
   <title>Browser IP-KVM Console</title>
   <style>
-    body { margin: 0; background: #111; color: #eee; font-family: monospace; overflow: hidden; }
-    #toolbar { padding: 8px; background: #222; display: flex; gap: 10px; align-items: center; }
-    #viewport { width: 100vw; height: calc(100vh - 45px); object-fit: contain; background: #000; cursor: crosshair; }
-    #status { color: #aaa; }
-    #echo-status { color: #4ade80; margin-left: auto; max-width: 50%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; }
+    body {
+      margin: 0;
+      background: #0f1117;
+      color: #eee;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      overflow: hidden;
+    }
+    #toolbar {
+      padding: 6px 14px;
+      background: #181b24;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      border-bottom: 1px solid #272b38;
+      height: 38px;
+      box-sizing: border-box;
+    }
+    #viewport {
+      width: 100vw;
+      height: calc(100vh - 38px);
+      object-fit: contain;
+      background: #000;
+      cursor: crosshair;
+      display: block;
+    }
+    
+    .slot {
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .btn {
+      background: #252a38;
+      color: #e2e8f0;
+      border: 1px solid #3b4256;
+      padding: 5px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease-in-out;
+      user-select: none;
+    }
+    .btn:hover {
+      background: #32384a;
+      border-color: #4f5874;
+      color: #fff;
+    }
+    .btn:active {
+      transform: scale(0.98);
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      user-select: none;
+      transition: all 0.2s ease;
+    }
+    .status-badge.connected {
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      color: #34d399;
+    }
+    .status-badge .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #10b981;
+      box-shadow: 0 0 8px rgba(16, 185, 129, 0.8);
+      display: inline-block;
+      flex-shrink: 0;
+    }
+    .pulse {
+      animation: pulse-dot 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    .btn-icon {
+      background: none;
+      border: none;
+      color: #94a3b8;
+      cursor: pointer;
+      padding: 2px 4px;
+      font-size: 13px;
+      line-height: 1;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-left: 2px;
+      transition: all 0.15s;
+    }
+    .btn-icon:hover {
+      color: #f87171;
+      background: rgba(248, 113, 113, 0.15);
+    }
+
+    .kvm-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #94a3b8;
+      user-select: none;
+    }
+    .kvm-badge.locked {
+      background: rgba(99, 102, 241, 0.15);
+      border-color: rgba(99, 102, 241, 0.4);
+      color: #a5b4fc;
+    }
+
+    #echo-status {
+      color: #4ade80;
+      margin-left: auto;
+      max-width: 45%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-size: 12px;
+      font-family: "SF Mono", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+    }
+
+    /* Popup Toast Notification */
+    #toastContainer {
+      position: fixed;
+      top: 50px;
+      right: 20px;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      pointer-events: none;
+    }
+    .toast {
+      pointer-events: auto;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 280px;
+      max-width: 420px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      background: #1c1924;
+      border-left: 4px solid #ef4444;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      border-right: 1px solid rgba(255, 255, 255, 0.08);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.4);
+      opacity: 0;
+      transform: translateX(40px);
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .toast.show {
+      opacity: 1;
+      transform: translateX(0);
+    }
+    .toast-icon {
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+    .toast-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .toast-title {
+      font-weight: 600;
+      color: #fca5a5;
+    }
+    .toast-msg {
+      font-size: 12px;
+      color: #cbd5e1;
+    }
+    .toast-close {
+      background: none;
+      border: none;
+      color: #94a3b8;
+      cursor: pointer;
+      font-size: 14px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      line-height: 1;
+    }
+    .toast-close:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.12);
+    }
   </style>
 </head>
 <body>
+  <div id="toastContainer"></div>
   <div id="toolbar">
-    <button id="btnConnectSerial">Connect RP2350 Serial</button>
-    <button id="btnStartVideo">Start Video Stream</button>
-    <span id="status">Status: Disconnected</span>
+    <!-- RP2350 Serial Slot -->
+    <div id="serialSlot" class="slot">
+      <button id="btnConnectSerial" class="btn">
+        <span>🔌</span> Connect RP2350 Serial
+      </button>
+      <div id="serialStatusBadge" class="status-badge connected" style="display: none;">
+        <span class="dot pulse"></span>
+        <span id="serialStatusText">RP2350: Connected</span>
+        <button id="btnDisconnectSerial" class="btn-icon" title="Disconnect Serial">✕</button>
+      </div>
+    </div>
+
+    <!-- UVC Video Stream Slot -->
+    <div id="videoSlot" class="slot">
+      <button id="btnStartVideo" class="btn">
+        <span>📹</span> Start Video Stream
+      </button>
+      <div id="videoStatusBadge" class="status-badge connected" style="display: none;">
+        <span class="dot pulse"></span>
+        <span id="videoStatusText">Video: Streaming</span>
+        <button id="btnStopVideo" class="btn-icon" title="Stop Video">✕</button>
+      </div>
+    </div>
+
+    <!-- KVM Input Focus Indicator -->
+    <div id="kvmIndicator" class="kvm-badge" style="display: none;">
+      <span id="kvmLockIcon">🎮</span>
+      <span id="kvmLockText">Click video to focus KVM</span>
+    </div>
+
     <span id="echo-status"></span>
   </div>
+
   <video id="viewport" autoplay playsinline muted></video>
 
   <script>
-    let port, writer;
+    let port, writer, reader;
+    let currentStream = null;
+
     const videoEl = document.getElementById('viewport');
-    const statusEl = document.getElementById('status');
     const echoStatusEl = document.getElementById('echo-status');
 
-    // 1. UVC Video Capture
-    document.getElementById('btnStartVideo').addEventListener('click', async () => {
+    // UI Elements
+    const btnConnectSerial = document.getElementById('btnConnectSerial');
+    const serialStatusBadge = document.getElementById('serialStatusBadge');
+    const serialStatusText = document.getElementById('serialStatusText');
+    const btnDisconnectSerial = document.getElementById('btnDisconnectSerial');
+
+    const btnStartVideo = document.getElementById('btnStartVideo');
+    const videoStatusBadge = document.getElementById('videoStatusBadge');
+    const videoStatusText = document.getElementById('videoStatusText');
+    const btnStopVideo = document.getElementById('btnStopVideo');
+
+    const kvmIndicator = document.getElementById('kvmIndicator');
+    const kvmLockText = document.getElementById('kvmLockText');
+
+    // -------------------------------------------------------------------------
+    // UI State Updaters
+    // -------------------------------------------------------------------------
+    function updateSerialUI(connected, detail) {
+      if (connected) {
+        btnConnectSerial.style.display = 'none';
+        serialStatusBadge.style.display = 'inline-flex';
+        serialStatusText.textContent = detail || 'RP2350: Connected';
+      } else {
+        btnConnectSerial.style.display = 'inline-flex';
+        serialStatusBadge.style.display = 'none';
+      }
+      updateKvmVisibility();
+    }
+
+    function updateVideoUI(connected, detail) {
+      if (connected) {
+        btnStartVideo.style.display = 'none';
+        videoStatusBadge.style.display = 'inline-flex';
+        videoStatusText.textContent = detail || 'Video: Streaming';
+      } else {
+        btnStartVideo.style.display = 'inline-flex';
+        videoStatusBadge.style.display = 'none';
+      }
+      updateKvmVisibility();
+    }
+
+    function updateKvmVisibility() {
+      if (currentStream || port) {
+        kvmIndicator.style.display = 'inline-flex';
+      } else {
+        kvmIndicator.style.display = 'none';
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // Toast Popup Notifications
+    // -------------------------------------------------------------------------
+    function showToast(title, message, isWarning = true) {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = 'toast';
+      toast.innerHTML = `
+        <span class="toast-icon">${isWarning ? '⚠️' : 'ℹ️'}</span>
+        <div class="toast-content">
+          <div class="toast-title">${title}</div>
+          ${message ? `<div class="toast-msg">${message}</div>` : ''}
+        </div>
+        <button class="toast-close" title="Close">✕</button>
+      `;
+
+      const dismiss = () => {
+        toast.classList.remove('show');
+        setTimeout(() => {
+          if (toast.parentNode) toast.parentNode.removeChild(toast);
+        }, 250);
+      };
+
+      toast.querySelector('.toast-close').addEventListener('click', dismiss);
+      container.appendChild(toast);
+
+      requestAnimationFrame(() => {
+        toast.classList.add('show');
+      });
+
+      setTimeout(dismiss, 4500);
+    }
+
+    // -------------------------------------------------------------------------
+    // 1. UVC Video Capture & Hooks
+    // -------------------------------------------------------------------------
+    async function startVideo() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: {
@@ -37,20 +350,78 @@
           },
           audio: false
         });
+
+        currentStream = stream;
         videoEl.srcObject = stream;
+
+        const videoTrack = stream.getVideoTracks()[0];
+        const settings = videoTrack.getSettings ? videoTrack.getSettings() : {};
+        const resText = settings.width && settings.height ? ` (${settings.width}x${settings.height})` : '';
+        updateVideoUI(true, `Video: Active${resText}`);
+
+        // Hook: Listen for stream track ending (e.g. UVC device unplugged)
+        videoTrack.addEventListener('ended', () => {
+          console.log('[KVM Video] Track ended (camera unplugged or stream stopped)');
+          stopVideo('UVC capture device unplugged or stream terminated.');
+        });
+
+        // Hook: Listen for track mute/unmute
+        videoTrack.addEventListener('mute', () => {
+          updateVideoUI(true, 'Video: Muted/Waiting');
+        });
+        videoTrack.addEventListener('unmute', () => {
+          updateVideoUI(true, `Video: Active${resText}`);
+        });
+
         console.log('[KVM Video] Stream started successfully');
       } catch (err) {
         console.error('[KVM Video] Video stream error:', err);
+        showToast('Video Stream Failed', err.message);
+        stopVideo('Could not start video stream: ' + err.message);
       }
-    });
+    }
 
-    // 2. Web Serial Setup & Echo Reader
+    function stopVideo(reason) {
+      const wasStreaming = !!currentStream;
+      if (currentStream) {
+        currentStream.getTracks().forEach(track => track.stop());
+        currentStream = null;
+      }
+      videoEl.srcObject = null;
+      updateVideoUI(false);
+      if (wasStreaming) {
+        showToast('Video Stream Disconnected', reason || 'UVC video stream has ended.');
+      }
+      console.log('[KVM Video] Stream stopped:', reason || 'Normal');
+    }
+
+    btnStartVideo.addEventListener('click', startVideo);
+    btnStopVideo.addEventListener('click', () => stopVideo('Video stream stopped by user.'));
+
+    // Hook: Listen for global media devices changes (plug/unplug)
+    if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+      navigator.mediaDevices.addEventListener('devicechange', async () => {
+        console.log('[KVM Video] Media device change event detected');
+        if (currentStream) {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const hasVideo = devices.some(d => d.kind === 'videoinput');
+          if (!hasVideo) {
+            console.warn('[KVM Video] No video input devices found, stopping stream');
+            stopVideo('UVC capture device was removed.');
+          }
+        }
+      });
+    }
+
+    // -------------------------------------------------------------------------
+    // 2. Web Serial Setup, Hooks & Echo Reader
+    // -------------------------------------------------------------------------
     async function startReading() {
       if (!port || !port.readable) return;
       const textDecoder = new TextDecoder();
       let rxBuffer = '';
       try {
-        const reader = port.readable.getReader();
+        reader = port.readable.getReader();
         while (true) {
           const { value, done } = await reader.read();
           if (done) break;
@@ -62,6 +433,19 @@
               const trimmed = line.trim();
               if (trimmed.length > 0) {
                 console.log('%c[RP2350 Echo]', 'color: #00ffaa; font-weight: bold;', trimmed);
+
+                // Parse firmware status updates to update UI badge text
+                if (trimmed.includes('heartbeat')) {
+                  const pioReady = trimmed.includes('pio_ready=1');
+                  serialStatusText.textContent = pioReady
+                    ? 'RP2350: Ready (Target PC OK)'
+                    : 'RP2350: Connected (Waiting Target)';
+                } else if (trimmed.includes('configured HID endpoints successfully')) {
+                  serialStatusText.textContent = 'RP2350: Ready (Target PC OK)';
+                } else if (trimmed.includes('Target PC bus reset')) {
+                  serialStatusText.textContent = 'RP2350: Connected (Target Reset)';
+                }
+
                 if (echoStatusEl) {
                   echoStatusEl.textContent = 'Echo: ' + trimmed;
                 }
@@ -70,46 +454,128 @@
           }
         }
       } catch (err) {
-        console.error('[KVM Serial] Read loop error:', err);
+        console.warn('[KVM Serial] Read loop stopped:', err);
+      } finally {
+        if (reader) {
+          try { reader.releaseLock(); } catch (e) {}
+          reader = null;
+        }
+        handleSerialDisconnected('RP2350 serial connection closed.');
       }
     }
 
-    document.getElementById('btnConnectSerial').addEventListener('click', async () => {
+    async function connectSerial() {
+      if (!navigator.serial) {
+        showToast('Web Serial Unsupported', 'Please use Chrome, Edge, or Opera for Web Serial support.');
+        return;
+      }
       try {
         port = await navigator.serial.requestPort();
         await port.open({ baudRate: 115200 });
+
         try {
           await port.setSignals({ dataTerminalReady: true, requestToSend: true });
         } catch (sigErr) {
           console.warn('[KVM Serial] Could not set DTR/RTS signals:', sigErr);
         }
+
         writer = port.writable.getWriter();
-        statusEl.textContent = 'Status: Connected to RP2350';
+        updateSerialUI(true, 'RP2350: Connected');
         console.log('[KVM Serial] Connected to RP2350');
         startReading();
       } catch (err) {
         console.error('[KVM Serial] Connection error:', err);
+        handleSerialDisconnected('Failed to connect to RP2350: ' + err.message);
       }
-    });
+    }
+
+    async function disconnectSerial(reason) {
+      try {
+        if (writer) {
+          await writer.close().catch(() => {});
+          writer = null;
+        }
+        if (reader) {
+          await reader.cancel().catch(() => {});
+          reader = null;
+        }
+        if (port) {
+          await port.close().catch(() => {});
+          port = null;
+        }
+      } catch (err) {
+        console.warn('[KVM Serial] Disconnect cleanup error:', err);
+      }
+      handleSerialDisconnected(reason || 'RP2350 serial disconnected by user.');
+    }
+
+    function handleSerialDisconnected(reason) {
+      const wasConnected = !!port;
+      writer = null;
+      reader = null;
+      port = null;
+      updateSerialUI(false);
+      if (wasConnected) {
+        showToast('RP2350 Serial Disconnected', reason || 'Serial connection closed.');
+      }
+      console.log('[KVM Serial] Serial port disconnected:', reason || 'Normal');
+    }
+
+    btnConnectSerial.addEventListener('click', connectSerial);
+    btnDisconnectSerial.addEventListener('click', () => disconnectSerial('RP2350 serial disconnected by user.'));
+
+    // Hook: Listen for serial device disconnect (hardware unplug)
+    if (navigator.serial) {
+      navigator.serial.addEventListener('disconnect', (event) => {
+        console.log('[KVM Serial] Hardware disconnect hook triggered:', event);
+        if (port && event.target === port) {
+          console.warn('[KVM Serial] Connected RP2350 was unplugged!');
+          disconnectSerial('RP2350 device was physically unplugged from USB.');
+        }
+      });
+
+      // Hook: Listen for serial device connect (hardware plug)
+      navigator.serial.addEventListener('connect', (event) => {
+        console.log('[KVM Serial] New serial device plugged in:', event);
+      });
+    }
 
     // Helper: Send Serial Packet
     async function sendPacket(bytes) {
       if (!writer) {
-        console.warn('[KVM Serial] Cannot send: RP2350 not connected.');
         return;
       }
-      await writer.write(new Uint8Array(bytes));
+      try {
+        await writer.write(new Uint8Array(bytes));
+      } catch (err) {
+        console.error('[KVM Serial] Write error:', err);
+      }
     }
 
-    // 3. Pointer Lock & Mouse Handling
+    // -------------------------------------------------------------------------
+    // 3. Pointer Lock & Input Capture Indicator Hooks
+    // -------------------------------------------------------------------------
     videoEl.addEventListener('click', () => {
       videoEl.requestPointerLock();
       if (navigator.keyboard && navigator.keyboard.lock) {
         navigator.keyboard.lock(['Escape', 'AltLeft', 'AltRight', 'Tab']);
       }
-      console.log('[KVM] Viewport locked for HID input forwarding');
     });
 
+    document.addEventListener('pointerlockchange', () => {
+      const isLocked = document.pointerLockElement === videoEl;
+      if (isLocked) {
+        kvmIndicator.classList.add('locked');
+        kvmLockText.textContent = 'Input Forwarding Active (ESC to release)';
+      } else {
+        kvmIndicator.classList.remove('locked');
+        kvmLockText.textContent = 'Click video to focus KVM';
+      }
+    });
+
+    // -------------------------------------------------------------------------
+    // 4. Mouse Input Handling
+    // -------------------------------------------------------------------------
     window.addEventListener('mousemove', (e) => {
       if (document.pointerLockElement !== videoEl) return;
       const dx = Math.max(-127, Math.min(127, e.movementX));
@@ -122,14 +588,12 @@
     window.addEventListener('mousedown', (e) => {
       if (document.pointerLockElement !== videoEl) return;
       const packet = [0x02, e.buttons, 0x00, 0x00, 0x00];
-      console.log('[KVM MouseDown] buttons=' + e.buttons, packet);
       sendPacket(packet);
     });
 
     window.addEventListener('mouseup', (e) => {
       if (document.pointerLockElement !== videoEl) return;
       const packet = [0x02, e.buttons, 0x00, 0x00, 0x00];
-      console.log('[KVM MouseUp] buttons=' + e.buttons, packet);
       sendPacket(packet);
     });
 
@@ -137,11 +601,12 @@
       if (document.pointerLockElement !== videoEl) return;
       const wheelDelta = e.deltaY < 0 ? 1 : (e.deltaY > 0 ? -1 : 0);
       const packet = [0x02, e.buttons, 0x00, 0x00, wheelDelta & 0xFF];
-      console.log('[KVM Wheel] wheelDelta=' + wheelDelta, packet);
       sendPacket(packet);
     });
 
-    // 4. Keyboard Translation (USB HID Scancodes)
+    // -------------------------------------------------------------------------
+    // 5. Keyboard Translation (USB HID Scancodes)
+    // -------------------------------------------------------------------------
     const KEY_MAP = {
       // Letters A-Z
       'KeyA': 0x04, 'KeyB': 0x05, 'KeyC': 0x06, 'KeyD': 0x07,
@@ -183,16 +648,12 @@
 
     window.addEventListener('keydown', (e) => {
       if (document.pointerLockElement !== videoEl) {
-        console.warn(`[KVM] Ignored keydown "${e.code}": video viewport is not focused/locked. Click the video stream to forward inputs.`);
         return;
       }
       e.preventDefault();
       const code = KEY_MAP[e.code] || 0x00;
       const mod = getModifiers(e);
       const packet = [0x01, mod, 0x00, code, 0x00];
-      console.log(`%c[KVM KeyDown Sent]`, 'color: #38bdf8; font-weight: bold;',
-        `code="${e.code}" key="${e.key}" scancode=0x${code.toString(16).padStart(2, '0')} mod=0x${mod.toString(16).padStart(2, '0')}`,
-        packet);
       sendPacket(packet);
     });
 
@@ -202,9 +663,6 @@
       const code = KEY_MAP[e.code] || 0x00;
       const mod = getModifiers(e);
       const packet = [0x01, mod, 0x00, 0x00, 0x00];
-      console.log(`%c[KVM KeyUp Sent]`, 'color: #818cf8; font-weight: bold;',
-        `code="${e.code}" key="${e.key}" released (mod=0x${mod.toString(16).padStart(2, '0')})`,
-        packet);
       sendPacket(packet);
     });
   </script>
