@@ -76,7 +76,8 @@
       pointer-events: none;
       transition: opacity 0.2s ease;
     }
-    .modal-backdrop.open {
+    .modal-backdrop.open,
+    .modal-backdrop.active {
       opacity: 1;
       pointer-events: auto;
     }
@@ -91,7 +92,8 @@
       transform: scale(0.95);
       transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     }
-    .modal-backdrop.open .modal-dialog {
+    .modal-backdrop.open .modal-dialog,
+    .modal-backdrop.active .modal-dialog {
       transform: scale(1);
     }
     .modal-header {
@@ -267,6 +269,203 @@
       font-family: "SF Mono", Consolas, "Liberation Mono", Menlo, Courier, monospace;
     }
 
+    /* Key Macros Dropdown & Modal Styles */
+    .macro-dropdown {
+      position: absolute;
+      top: calc(100% + 8px);
+      left: 0;
+      width: 320px;
+      background: #181b24;
+      border: 1px solid #2e3446;
+      border-radius: 10px;
+      padding: 12px;
+      box-shadow: 0 14px 35px rgba(0, 0, 0, 0.65), 0 4px 10px rgba(0, 0, 0, 0.4);
+      z-index: 1000;
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .macro-dropdown.open {
+      display: flex;
+    }
+    .custom-macro-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 250px;
+      overflow-y: auto;
+    }
+    .custom-macro-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 10px;
+      background: #222634;
+      border: 1px solid #33394c;
+      border-radius: 6px;
+      font-size: 12px;
+      color: #e2e8f0;
+      gap: 8px;
+    }
+    .custom-macro-info {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-width: 0;
+    }
+    .custom-macro-name {
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .custom-macro-keys {
+      font-size: 10px;
+      color: #94a3b8;
+    }
+    .custom-macro-actions {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+    .btn-macro-send {
+      background: #3730a3;
+      border: 1px solid #4f46e5;
+      color: #fff;
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: 500;
+      transition: all 0.15s;
+    }
+    .btn-macro-send:hover {
+      background: #4338ca;
+    }
+    .macro-empty {
+      font-size: 12px;
+      color: #64748b;
+      font-style: italic;
+      text-align: center;
+      padding: 8px 4px;
+    }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 14px;
+    }
+    .form-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #cbd5e1;
+    }
+    .form-input, .form-select {
+      background: #222634;
+      border: 1px solid #33394c;
+      border-radius: 6px;
+      color: #f1f5f9;
+      padding: 8px 10px;
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .form-input:focus, .form-select:focus {
+      border-color: #6366f1;
+    }
+    .modifier-checkboxes {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+      background: #222634;
+      padding: 10px;
+      border-radius: 6px;
+      border: 1px solid #33394c;
+    }
+    .mod-check-label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #e2e8f0;
+      cursor: pointer;
+      user-select: none;
+    }
+    .mod-check-label input {
+      accent-color: #6366f1;
+      cursor: pointer;
+    }
+    .key-recorder-box {
+      background: #222634;
+      border: 2px dashed #475569;
+      border-radius: 8px;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      user-select: none;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+    .key-recorder-box:hover {
+      border-color: #6366f1;
+      background: #262b3b;
+    }
+    .key-recorder-box:focus,
+    .key-recorder-box.recording {
+      border-color: #818cf8;
+      border-style: solid;
+      background: rgba(99, 102, 241, 0.12);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+    }
+    .key-recorder-content {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .key-recorder-badge {
+      display: inline-block;
+      background: #33394c;
+      color: #cbd5e1;
+      border: 1px solid #475569;
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 13px;
+      font-weight: 600;
+      transition: all 0.15s;
+    }
+    .key-recorder-box.recording .key-recorder-badge {
+      background: #4338ca;
+      border-color: #6366f1;
+      color: #fff;
+    }
+    .key-recorder-prompt {
+      font-size: 12px;
+      color: #94a3b8;
+    }
+    .btn-clear-key {
+      background: none;
+      border: none;
+      color: #64748b;
+      cursor: pointer;
+      font-size: 13px;
+      padding: 4px 6px;
+      border-radius: 4px;
+      transition: all 0.15s;
+    }
+    .btn-clear-key:hover {
+      color: #ef4444;
+      background: rgba(239, 68, 68, 0.12);
+    }
+    .form-hint {
+      font-size: 11px;
+      color: #64748b;
+      margin-top: 5px;
+      line-height: 1.4;
+    }
+
     /* Popup Toast Notification */
     #toastContainer {
       position: fixed;
@@ -363,6 +562,24 @@
       </div>
     </div>
 
+    <!-- Key Macros Slot -->
+    <div id="macroSlot" class="slot" style="position: relative;">
+      <button id="btnMacroMenu" class="btn">
+        <span>⚡</span> Key Macros ▾
+      </button>
+
+      <!-- Dropdown Popover Menu -->
+      <div id="macroDropdown" class="macro-dropdown">
+        <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px; border-bottom: 1px solid #2e3446;">
+          <span style="font-size: 13px; font-weight: 600; color: #f1f5f9;">Custom Macros</span>
+          <button id="btnOpenMacroModal" class="btn" style="padding: 4px 10px; font-size: 11px; background: #4f46e5; border-color: #6366f1; color: #fff; cursor: pointer;">
+            + Add Macro
+          </button>
+        </div>
+        <div id="customMacroList" class="custom-macro-list"></div>
+      </div>
+    </div>
+
     <!-- KVM Input Focus Indicator -->
     <div id="kvmIndicator" class="kvm-badge" style="display: none;">
       <span id="kvmLockIcon">🎮</span>
@@ -381,6 +598,51 @@
       <div id="deviceListContainer" class="device-list"></div>
       <div class="modal-footer">
         <button id="btnModalCancel" class="btn-cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Key Macro Modal -->
+  <div id="macroModalBackdrop" class="modal-backdrop">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div class="modal-title"><span>⚡</span> Create Custom Key Macro</div>
+        <button id="btnMacroModalClose" class="btn-icon" title="Close">✕</button>
+      </div>
+      <div class="modal-desc">
+        Define a key combination to send directly to the target OS, bypassing host OS shortcuts (like Spotlight, Task Switcher, Win+L, etc.).
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="macroNameInput">Macro Name</label>
+        <input type="text" id="macroNameInput" class="form-input" placeholder="e.g. Spotlight Search, Force Quit, Lock PC" maxlength="30" />
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Modifier Keys</label>
+        <div class="modifier-checkboxes">
+          <label class="mod-check-label"><input type="checkbox" id="modCtrl" /> <span>Ctrl</span></label>
+          <label class="mod-check-label"><input type="checkbox" id="modAlt" /> <span>Alt / Option</span></label>
+          <label class="mod-check-label"><input type="checkbox" id="modShift" /> <span>Shift</span></label>
+          <label class="mod-check-label"><input type="checkbox" id="modMeta" /> <span>Cmd / Win (Super)</span></label>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Target Key</label>
+        <div id="keyRecorderBox" class="key-recorder-box" tabindex="0">
+          <div class="key-recorder-content">
+            <span id="keyRecorderBadge" class="key-recorder-badge">None</span>
+            <span id="keyRecorderPrompt" class="key-recorder-prompt">Click to record key press</span>
+          </div>
+          <button type="button" id="btnClearKey" class="btn-clear-key" title="Clear target key (modifiers only)">✕</button>
+        </div>
+        <div class="form-hint">Tip: Click the box above and press any key on your keyboard. You can also toggle modifiers above or press them directly.</div>
+      </div>
+
+      <div class="modal-footer" style="margin-top: 20px;">
+        <button id="btnMacroModalCancel" class="btn-cancel">Cancel</button>
+        <button id="btnMacroModalSave" class="btn" style="background: #4f46e5; border-color: #6366f1; color: #fff;">Save Macro</button>
       </div>
     </div>
   </div>
@@ -961,6 +1223,395 @@
       const packet = [0x01, mod, 0x00, 0x00, 0x00];
       sendPacket(packet);
     });
+
+    // -------------------------------------------------------------------------
+    // 4. Key Macro System (OS Intercepted Shortcuts Bypass)
+    // -------------------------------------------------------------------------
+    const btnMacroMenu = document.getElementById('btnMacroMenu');
+    const macroDropdown = document.getElementById('macroDropdown');
+    const macroSlot = document.getElementById('macroSlot');
+    const customMacroList = document.getElementById('customMacroList');
+    const btnOpenMacroModal = document.getElementById('btnOpenMacroModal');
+    const macroModalBackdrop = document.getElementById('macroModalBackdrop');
+    const btnMacroModalClose = document.getElementById('btnMacroModalClose');
+    const btnMacroModalCancel = document.getElementById('btnMacroModalCancel');
+    const btnMacroModalSave = document.getElementById('btnMacroModalSave');
+    const macroNameInput = document.getElementById('macroNameInput');
+    const modCtrl = document.getElementById('modCtrl');
+    const modAlt = document.getElementById('modAlt');
+    const modShift = document.getElementById('modShift');
+    const modMeta = document.getElementById('modMeta');
+    const keyRecorderBox = document.getElementById('keyRecorderBox');
+    const keyRecorderBadge = document.getElementById('keyRecorderBadge');
+    const keyRecorderPrompt = document.getElementById('keyRecorderPrompt');
+    const btnClearKey = document.getElementById('btnClearKey');
+
+    let recordedKeyCode = 0x00;
+    let recordedKeyName = 'None';
+
+    const MACRO_STORAGE_KEY = 'kvm_custom_macros';
+
+    // Friendly display name for keyboard event codes
+    function getFriendlyKeyName(code) {
+      if (!code) return 'None';
+      if (code.startsWith('Key')) return code.substring(3);
+      if (code.startsWith('Digit')) return code.substring(5);
+      if (code.startsWith('Arrow')) return code.replace('Arrow', 'Arrow ');
+      const friendly = {
+        'Space': 'Space',
+        'Tab': 'Tab',
+        'Enter': 'Enter',
+        'Escape': 'Escape',
+        'Backspace': 'Backspace',
+        'Delete': 'Delete',
+        'Insert': 'Insert',
+        'Home': 'Home',
+        'End': 'End',
+        'PageUp': 'Page Up',
+        'PageDown': 'Page Down',
+        'PrintScreen': 'Print Screen',
+        'ScrollLock': 'Scroll Lock',
+        'Pause': 'Pause',
+        'CapsLock': 'Caps Lock',
+        'Minus': '-',
+        'Equal': '=',
+        'BracketLeft': '[',
+        'BracketRight': ']',
+        'Backslash': '\\',
+        'Semicolon': ';',
+        'Quote': "'",
+        'Backquote': '`',
+        'Comma': ',',
+        'Period': '.',
+        'Slash': '/'
+      };
+      return friendly[code] || code;
+    }
+
+    // Build reverse lookup from HID code to readable name
+    const HID_TO_NAME = {};
+    for (const [k, v] of Object.entries(KEY_MAP)) {
+      if (!HID_TO_NAME[v]) {
+        HID_TO_NAME[v] = getFriendlyKeyName(k);
+      }
+    }
+
+    // Toggle Dropdown Menu
+    if (btnMacroMenu) {
+      btnMacroMenu.addEventListener('click', (e) => {
+        e.stopPropagation();
+        macroDropdown.classList.toggle('open');
+      });
+    }
+
+    // Close Dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+      if (macroSlot && !macroSlot.contains(e.target) && macroDropdown && macroDropdown.classList.contains('open')) {
+        macroDropdown.classList.remove('open');
+      }
+    });
+
+    // Trigger Key Macro to Target OS via RP2350 HID
+    async function triggerKeyMacro(macro) {
+      if (!hidDevice || !hidDevice.opened) {
+        showToast('RP2350 Not Connected', 'Please connect RP2350 HID first to send key macros.');
+        return;
+      }
+      try {
+        const mod = Number(macro.modifiers) || 0;
+        const code = Number(macro.code) || 0;
+        sendKeyboard(mod, code);
+        await new Promise(r => setTimeout(r, 80));
+        sendKeyboard(0, 0);
+        showToast('⚡ Macro Sent', macro.name || 'Key macro dispatched to target PC.', false);
+      } catch (err) {
+        console.error('[KVM Macro] Error dispatching key macro:', err);
+        showToast('Macro Error', 'Failed to dispatch key macro to RP2350.');
+      }
+    }
+
+    // Format macro keys string for display
+    function formatMacroKeys(macro) {
+      const parts = [];
+      const mod = Number(macro.modifiers) || 0;
+      if (mod & 0x01) parts.push('Ctrl');
+      if (mod & 0x02) parts.push('Shift');
+      if (mod & 0x04) parts.push('Alt');
+      if (mod & 0x08) parts.push('Cmd/Win');
+      const code = Number(macro.code) || 0;
+      if (code !== 0) {
+        parts.push(HID_TO_NAME[code] || `0x${code.toString(16).toUpperCase()}`);
+      }
+      return parts.join(' + ') || 'None';
+    }
+
+    // Key Recorder UI and Event Listeners
+    function updateKeyRecorderUI(isRecording) {
+      if (!keyRecorderBox) return;
+      if (isRecording) {
+        keyRecorderBox.classList.add('recording');
+        keyRecorderPrompt.textContent = 'Listening... Press any key on your keyboard';
+        keyRecorderBadge.textContent = '...';
+      } else {
+        keyRecorderBox.classList.remove('recording');
+        keyRecorderBadge.textContent = recordedKeyName;
+        if (recordedKeyCode !== 0) {
+          keyRecorderPrompt.textContent = 'Key captured! Click to change.';
+        } else {
+          keyRecorderPrompt.textContent = 'Click to record key press';
+        }
+      }
+    }
+
+    if (keyRecorderBox) {
+      keyRecorderBox.addEventListener('focus', () => updateKeyRecorderUI(true));
+      keyRecorderBox.addEventListener('blur', () => updateKeyRecorderUI(false));
+      keyRecorderBox.addEventListener('click', (e) => {
+        if (e.target === btnClearKey) return;
+        keyRecorderBox.focus();
+        updateKeyRecorderUI(true);
+      });
+
+      keyRecorderBox.addEventListener('keydown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Update modifiers if held during press
+        if (e.ctrlKey) modCtrl.checked = true;
+        if (e.shiftKey) modShift.checked = true;
+        if (e.altKey) modAlt.checked = true;
+        if (e.metaKey) modMeta.checked = true;
+
+        const isModifierKey = [
+          'ControlLeft', 'ControlRight',
+          'ShiftLeft', 'ShiftRight',
+          'AltLeft', 'AltRight',
+          'MetaLeft', 'MetaRight'
+        ].includes(e.code);
+
+        if (isModifierKey) {
+          if (e.code.startsWith('Control')) modCtrl.checked = true;
+          if (e.code.startsWith('Shift')) modShift.checked = true;
+          if (e.code.startsWith('Alt')) modAlt.checked = true;
+          if (e.code.startsWith('Meta')) modMeta.checked = true;
+          keyRecorderPrompt.textContent = 'Modifier detected! Press target key or save.';
+          return;
+        }
+
+        if (KEY_MAP[e.code] !== undefined) {
+          recordedKeyCode = KEY_MAP[e.code];
+          recordedKeyName = getFriendlyKeyName(e.code);
+          updateKeyRecorderUI(false);
+          keyRecorderBox.blur();
+
+          if (!macroNameInput.value.trim()) {
+            const previewMod = (modCtrl.checked ? 1 : 0) | (modShift.checked ? 2 : 0) | (modAlt.checked ? 4 : 0) | (modMeta.checked ? 8 : 0);
+            macroNameInput.placeholder = formatMacroKeys({ modifiers: previewMod, code: recordedKeyCode });
+          }
+        } else {
+          console.warn('[KVM Macro] Unmapped keycode:', e.code);
+          keyRecorderPrompt.textContent = `Key (${e.code}) not supported. Try another key.`;
+        }
+      });
+    }
+
+    if (btnClearKey) {
+      btnClearKey.addEventListener('click', (e) => {
+        e.stopPropagation();
+        recordedKeyCode = 0x00;
+        recordedKeyName = 'None';
+        updateKeyRecorderUI(false);
+      });
+    }
+
+    // Load & Save Custom Macros via localStorage
+    function loadCustomMacros() {
+      try {
+        const data = localStorage.getItem(MACRO_STORAGE_KEY);
+        return data ? JSON.parse(data) : [];
+      } catch (err) {
+        console.warn('[KVM Macro] Failed to load custom macros:', err);
+        return [];
+      }
+    }
+
+    function saveCustomMacros(list) {
+      try {
+        localStorage.setItem(MACRO_STORAGE_KEY, JSON.stringify(list));
+      } catch (err) {
+        console.warn('[KVM Macro] Failed to save custom macros:', err);
+      }
+    }
+
+    function renderCustomMacros() {
+      if (!customMacroList) return;
+      const macros = loadCustomMacros();
+      customMacroList.innerHTML = '';
+
+      if (macros.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'macro-empty';
+        empty.textContent = 'No custom macros yet. Click "+ Add Macro" above to create one.';
+        customMacroList.appendChild(empty);
+        return;
+      }
+
+      macros.forEach(macro => {
+        const item = document.createElement('div');
+        item.className = 'custom-macro-item';
+
+        const info = document.createElement('div');
+        info.className = 'custom-macro-info';
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'custom-macro-name';
+        nameSpan.title = macro.name;
+        nameSpan.textContent = macro.name;
+
+        const keysSpan = document.createElement('span');
+        keysSpan.className = 'custom-macro-keys';
+        keysSpan.textContent = formatMacroKeys(macro);
+
+        info.appendChild(nameSpan);
+        info.appendChild(keysSpan);
+
+        const actions = document.createElement('div');
+        actions.className = 'custom-macro-actions';
+
+        const btnSend = document.createElement('button');
+        btnSend.className = 'btn-macro-send';
+        btnSend.textContent = 'Send';
+        btnSend.addEventListener('click', (e) => {
+          e.stopPropagation();
+          triggerKeyMacro(macro);
+          if (macroDropdown) macroDropdown.classList.remove('open');
+        });
+
+        const btnDel = document.createElement('button');
+        btnDel.className = 'btn-icon';
+        btnDel.style.color = '#ef4444';
+        btnDel.style.fontSize = '12px';
+        btnDel.title = 'Delete macro';
+        btnDel.textContent = '✕';
+        btnDel.addEventListener('click', (e) => {
+          e.stopPropagation();
+          deleteCustomMacro(macro.id);
+        });
+
+        actions.appendChild(btnSend);
+        actions.appendChild(btnDel);
+        item.appendChild(info);
+        item.appendChild(actions);
+        customMacroList.appendChild(item);
+      });
+    }
+
+    function deleteCustomMacro(id) {
+      const list = loadCustomMacros().filter(m => m.id !== id);
+      saveCustomMacros(list);
+      renderCustomMacros();
+    }
+
+    // Custom Macro Modal Handlers
+    function openMacroModal() {
+      if (!macroModalBackdrop) return;
+      macroNameInput.value = '';
+      macroNameInput.placeholder = 'e.g. Spotlight Search, Force Quit, Lock PC';
+      modCtrl.checked = false;
+      modAlt.checked = false;
+      modShift.checked = false;
+      modMeta.checked = false;
+      recordedKeyCode = 0x00;
+      recordedKeyName = 'None';
+      updateKeyRecorderUI(false);
+      macroModalBackdrop.classList.add('open');
+      macroModalBackdrop.classList.add('active');
+      setTimeout(() => {
+        if (keyRecorderBox) keyRecorderBox.focus();
+      }, 60);
+    }
+
+    function closeMacroModal() {
+      if (!macroModalBackdrop) return;
+      macroModalBackdrop.classList.remove('open');
+      macroModalBackdrop.classList.remove('active');
+    }
+
+    if (btnOpenMacroModal) {
+      btnOpenMacroModal.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (macroDropdown) macroDropdown.classList.remove('open');
+        openMacroModal();
+      });
+    }
+
+    if (btnMacroModalClose) btnMacroModalClose.addEventListener('click', closeMacroModal);
+    if (btnMacroModalCancel) btnMacroModalCancel.addEventListener('click', closeMacroModal);
+    if (macroModalBackdrop) {
+      macroModalBackdrop.addEventListener('click', (e) => {
+        if (e.target === macroModalBackdrop) {
+          closeMacroModal();
+        }
+      });
+    }
+
+    // Close macro modal on Escape key (when not recording a key)
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && macroModalBackdrop && (macroModalBackdrop.classList.contains('open') || macroModalBackdrop.classList.contains('active'))) {
+        if (document.activeElement !== keyRecorderBox) {
+          closeMacroModal();
+        }
+      }
+    });
+
+    // Save on Enter in name input
+    if (macroNameInput) {
+      macroNameInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          if (btnMacroModalSave) btnMacroModalSave.click();
+        }
+      });
+    }
+
+    if (btnMacroModalSave) {
+      btnMacroModalSave.addEventListener('click', () => {
+        let mod = 0;
+        if (modCtrl.checked) mod |= 0x01;
+        if (modShift.checked) mod |= 0x02;
+        if (modAlt.checked) mod |= 0x04;
+        if (modMeta.checked) mod |= 0x08;
+
+        const code = recordedKeyCode;
+
+        if (mod === 0 && code === 0) {
+          showToast('Invalid Macro', 'Please press a key or select at least one modifier.');
+          return;
+        }
+
+        let name = macroNameInput.value.trim();
+        if (!name) {
+          name = formatMacroKeys({ modifiers: mod, code });
+        }
+
+        const newMacro = {
+          id: Date.now().toString(),
+          name,
+          modifiers: mod,
+          code
+        };
+
+        const list = loadCustomMacros();
+        list.push(newMacro);
+        saveCustomMacros(list);
+        renderCustomMacros();
+        closeMacroModal();
+        showToast('⚡ Macro Saved', `Macro "${name}" created successfully.`, false);
+      });
+    }
+
+    // Initial render of custom macros
+    renderCustomMacros();
   </script>
 </body>
 </html>
