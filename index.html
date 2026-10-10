@@ -1040,7 +1040,15 @@
         return;
       }
       try {
-        port = await navigator.serial.requestPort();
+        // Strictly filter serial device picker to RP2350 / Raspberry Pi Pico CDC devices
+        const filters = [
+          { usbVendorId: 0x2e8a, usbProductId: 0x000a }, // Raspberry Pi Pico SDK CDC (stdio_usb)
+          { usbVendorId: 0x2e8a },                         // Raspberry Pi Vendor ID
+          { usbVendorId: 0xCafe, usbProductId: 0x4001 }, // KVM Vendor / Product ID
+          { usbVendorId: 0xCafe, usbProductId: 0x4005 }, // KVM Vendor / Alternative Product ID
+          { usbVendorId: 0xCafe }                          // KVM Vendor ID
+        ];
+        port = await navigator.serial.requestPort({ filters });
         await port.open({ baudRate: 115200 });
 
         try {
