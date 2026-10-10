@@ -362,6 +362,24 @@
       text-align: center;
       padding: 8px 4px;
     }
+    .macro-dropdown-footer {
+      padding-top: 8px;
+      border-top: 1px solid #2e3446;
+      margin-top: 2px;
+    }
+    .macro-autofocus-label {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 11px;
+      color: #cbd5e1;
+      cursor: pointer;
+      user-select: none;
+    }
+    .macro-autofocus-label input {
+      accent-color: #6366f1;
+      cursor: pointer;
+    }
     .form-group {
       display: flex;
       flex-direction: column;
@@ -589,6 +607,12 @@
           </button>
         </div>
         <div id="customMacroList" class="custom-macro-list"></div>
+        <div class="macro-dropdown-footer">
+          <label class="macro-autofocus-label">
+            <input type="checkbox" id="chkMacroAutoFocus" checked />
+            <span>Auto-focus KVM after sending macro</span>
+          </label>
+        </div>
       </div>
     </div>
 
@@ -1133,12 +1157,18 @@
     // -------------------------------------------------------------------------
     // 3. Pointer Lock & Input Capture Indicator Hooks
     // -------------------------------------------------------------------------
-    videoEl.addEventListener('click', () => {
-      videoEl.requestPointerLock();
-      if (navigator.keyboard && navigator.keyboard.lock) {
-        navigator.keyboard.lock(['Escape', 'AltLeft', 'AltRight', 'Tab']);
+    function focusKvm() {
+      try {
+        videoEl.requestPointerLock();
+        if (navigator.keyboard && navigator.keyboard.lock) {
+          navigator.keyboard.lock(['Escape', 'AltLeft', 'AltRight', 'Tab']);
+        }
+      } catch (err) {
+        console.warn('[KVM] Focus pointer lock error:', err);
       }
-    });
+    }
+
+    videoEl.addEventListener('click', focusKvm);
 
     document.addEventListener('pointerlockchange', () => {
       const isLocked = document.pointerLockElement === videoEl;
@@ -1332,6 +1362,32 @@
       }
     });
 
+    // Auto-focus KVM Preference Management
+    const chkMacroAutoFocus = document.getElementById('chkMacroAutoFocus');
+    const MACRO_AUTOFOCUS_KEY = 'kvm_macro_autofocus';
+
+    function isMacroAutoFocusEnabled() {
+      const val = localStorage.getItem(MACRO_AUTOFOCUS_KEY);
+      return val === null ? true : val === 'true';
+    }
+
+    function setMacroAutoFocus(enabled) {
+      localStorage.setItem(MACRO_AUTOFOCUS_KEY, enabled ? 'true' : 'false');
+      if (chkMacroAutoFocus) {
+        chkMacroAutoFocus.checked = enabled;
+      }
+    }
+
+    if (chkMacroAutoFocus) {
+      chkMacroAutoFocus.checked = isMacroAutoFocusEnabled();
+      chkMacroAutoFocus.addEventListener('click', (e) => {
+        e.stopPropagation(); // Prevent closing the macro dropdown
+      });
+      chkMacroAutoFocus.addEventListener('change', (e) => {
+        setMacroAutoFocus(e.target.checked);
+      });
+    }
+
     // Trigger Key Macro to Target OS via RP2350 Serial
     async function triggerKeyMacro(macro) {
       if (!writer) {
@@ -1339,9 +1395,13 @@
         return;
       }
       try {
+        const autoFocus = isMacroAutoFocusEnabled();
         const mod = Number(macro.modifiers) || 0;
         const code = Number(macro.code) || 0;
         sendPacket([0x01, mod, 0x00, code, 0x00]);
+        if (autoFocus) {
+          focusKvm();
+        }
         await new Promise(r => setTimeout(r, 80));
         sendPacket([0x01, 0x00, 0x00, 0x00, 0x00]);
         showToast('⚡ Macro Sent', macro.name || 'Key macro dispatched to target PC.', false);
