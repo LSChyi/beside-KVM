@@ -1066,6 +1066,7 @@
       try {
         // Strictly filter serial device picker to RP2350 / Raspberry Pi Pico CDC devices
         const filters = [
+          { usbVendorId: 0x1a86, usbProductId: 0x55d3 }, 
           { usbVendorId: 0x2e8a, usbProductId: 0x000a }, // Raspberry Pi Pico SDK CDC (stdio_usb)
           { usbVendorId: 0x2e8a },                         // Raspberry Pi Vendor ID
           { usbVendorId: 0xCafe, usbProductId: 0x4001 }, // KVM Vendor / Product ID
@@ -1242,36 +1243,31 @@
       'Insert': 0x49, 'Home': 0x4A, 'PageUp': 0x4B,
       'Delete': 0x4C, 'End': 0x4D, 'PageDown': 0x4E,
       // Arrows
-      'ArrowRight': 0x4F, 'ArrowLeft': 0x50, 'ArrowDown': 0x51, 'ArrowUp': 0x52
+      'ArrowRight': 0x4F, 'ArrowLeft': 0x50, 'ArrowDown': 0x51, 'ArrowUp': 0x52,
+      // Modifiers (USB HID 0xE0-0xE7)
+      'ControlLeft': 0xE0, 'ShiftLeft': 0xE1, 'AltLeft': 0xE2, 'MetaLeft': 0xE3,
+      'ControlRight': 0xE4, 'ShiftRight': 0xE5, 'AltRight': 0xE6, 'MetaRight': 0xE7
     };
-
-    function getModifiers(e) {
-      let mask = 0;
-      if (e.ctrlKey) mask |= 0x01;
-      if (e.shiftKey) mask |= 0x02;
-      if (e.altKey) mask |= 0x04;
-      if (e.metaKey) mask |= 0x08;
-      return mask;
-    }
 
     window.addEventListener('keydown', (e) => {
       if (document.pointerLockElement !== videoEl) {
         return;
       }
       e.preventDefault();
+      if (e.repeat) return;
       const code = KEY_MAP[e.code] || 0x00;
-      const mod = getModifiers(e);
-      const packet = [0x01, mod, 0x00, code, 0x00];
-      sendPacket(packet);
+      if (code) {
+        sendPacket([0x01, 0x01, code]);
+      }
     });
 
     window.addEventListener('keyup', (e) => {
       if (document.pointerLockElement !== videoEl) return;
       e.preventDefault();
       const code = KEY_MAP[e.code] || 0x00;
-      const mod = getModifiers(e);
-      const packet = [0x01, mod, 0x00, 0x00, 0x00];
-      sendPacket(packet);
+      if (code) {
+        sendPacket([0x01, 0x00, code]);
+      }
     });
 
     // -------------------------------------------------------------------------
@@ -1398,12 +1394,28 @@
         const autoFocus = isMacroAutoFocusEnabled();
         const mod = Number(macro.modifiers) || 0;
         const code = Number(macro.code) || 0;
-        sendPacket([0x01, mod, 0x00, code, 0x00]);
+        const modKeys = [];
+        if (mod & 0x01) modKeys.push(0xE0);
+        if (mod & 0x02) modKeys.push(0xE1);
+        if (mod & 0x04) modKeys.push(0xE2);
+        if (mod & 0x08) modKeys.push(0xE3);
+
+        for (const mk of modKeys) {
+          sendPacket([0x01, 0x01, mk]);
+        }
+        if (code) {
+          sendPacket([0x01, 0x01, code]);
+        }
         if (autoFocus) {
           focusKvm();
         }
         await new Promise(r => setTimeout(r, 80));
-        sendPacket([0x01, 0x00, 0x00, 0x00, 0x00]);
+        if (code) {
+          sendPacket([0x01, 0x00, code]);
+        }
+        for (let i = modKeys.length - 1; i >= 0; i--) {
+          sendPacket([0x01, 0x00, modKeys[i]]);
+        }
         showToast('⚡ Macro Sent', macro.name || 'Key macro dispatched to target PC.', false);
       } catch (err) {
         console.error('[KVM Macro] Error dispatching key macro:', err);

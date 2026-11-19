@@ -145,6 +145,93 @@ static inline void kbd_queue_drop(void) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// CMK Keyboard Stack (6KRO + modifier tracking + dedup -> kbd_queue)
+// Derived from CMK/src/core0/core/action_util.c & keycode.h
+// ---------------------------------------------------------------------------
+
+#define KEY_SLOTS 6
+#define IS_HID_MOD(kc) ((kc) >= 0xE0 && (kc) <= 0xE7)
+#define MOD_BIT(kc)    ((uint8_t)(1u << ((kc) - 0xE0)))
+
+static uint8_t kbd_real_mods = 0;
+static uint8_t kbd_keys[KEY_SLOTS] = {0};
+static hid_keyboard_report_t kbd_prev_report = {0};
+static bool kbd_dirty = false;
+
+static void register_code(uint8_t kc) {
+  if (IS_HID_MOD(kc)) {
+    uint8_t bit = MOD_BIT(kc);
+    if ((kbd_real_mods & bit) == 0) {
+      kbd_real_mods |= bit;
+      kbd_dirty = true;
+    }
+    return;
+  }
+
+  if (kc == 0) return;
+
+  for (int i = 0; i < KEY_SLOTS; i++) {
+    if (kbd_keys[i] == kc) return;
+  }
+
+  for (int i = 0; i < KEY_SLOTS; i++) {
+    if (kbd_keys[i] == 0) {
+      kbd_keys[i] = kc;
+      kbd_dirty = true;
+      return;
+    }
+  }
+}
+
+static void unregister_code(uint8_t kc) {
+  if (IS_HID_MOD(kc)) {
+    uint8_t bit = MOD_BIT(kc);
+    if (kbd_real_mods & bit) {
+      kbd_real_mods &= (uint8_t)~bit;
+      kbd_dirty = true;
+    }
+    return;
+  }
+
+  for (int i = 0; i < KEY_SLOTS; i++) {
+    if (kbd_keys[i] == kc) {
+      kbd_keys[i] = 0;
+      kbd_dirty = true;
+      return;
+    }
+  }
+}
+
+static void send_keyboard_report(void) {
+  hid_keyboard_report_t report = {0};
+  report.modifier = kbd_real_mods;
+  report.reserved = 0;
+
+  int slot = 0;
+  for (int i = 0; i < KEY_SLOTS && slot < KEY_SLOTS; i++) {
+    if (kbd_keys[i] != 0) {
+      report.keycode[slot++] = kbd_keys[i];
+    }
+  }
+
+  if (memcmp(&report, &kbd_prev_report, sizeof(report)) == 0) {
+    kbd_dirty = false;
+    return;
+  }
+
+  kbd_prev_report = report;
+  kbd_queue_push(&report);
+  kbd_dirty = false;
+}
+
+static void clear_keyboard(void) {
+  kbd_real_mods = 0;
+  memset(kbd_keys, 0, sizeof(kbd_keys));
+  kbd_dirty = true;
+  send_keyboard_report();
+}
+
 // Mouse state
 static volatile uint8_t mouse_buttons = 0;
 static volatile int32_t mouse_accum_x = 0;
@@ -160,19 +247,19 @@ enum parse_state_t {
 
 static enum parse_state_t parse_state = STATE_WAIT_CMD;
 static uint8_t current_cmd = 0;
+static uint8_t expected_len = 0;
 static uint8_t payload_buf[4];
 static uint8_t payload_idx = 0;
 static uint32_t last_rx_time = 0;
 
 static void handle_packet(uint8_t cmd, const uint8_t *payload) {
   if (cmd == 0x01) {
-    // Keyboard packet: [0x01, modifiers, reserved, keycode, keycode2]
-    hid_keyboard_report_t report = {0};
-    report.modifier = payload[0];
-    report.reserved = payload[1];
-    report.keycode[0] = payload[2];
-    report.keycode[1] = payload[3];
-    kbd_queue_push(&report);
+    // Keyboard key event: [0x01, pressed (1=down, 0=up), keycode]
+    if (payload[0]) {
+      register_code(payload[1]);
+    } else {
+      unregister_code(payload[1]);
+    }
   } else if (cmd == 0x02) {
     // Mouse packet: [0x02, buttons, dx, dy, wheel]
     mouse_buttons = payload[0];
@@ -187,14 +274,20 @@ static void process_serial_byte(uint8_t byte) {
   last_rx_time = to_ms_since_boot(get_absolute_time());
 
   if (parse_state == STATE_WAIT_CMD) {
-    if (byte == 0x01 || byte == 0x02) {
+    if (byte == 0x01) {
       current_cmd = byte;
+      expected_len = 2;
+      payload_idx = 0;
+      parse_state = STATE_WAIT_PAYLOAD;
+    } else if (byte == 0x02) {
+      current_cmd = byte;
+      expected_len = 4;
       payload_idx = 0;
       parse_state = STATE_WAIT_PAYLOAD;
     }
   } else if (parse_state == STATE_WAIT_PAYLOAD) {
     payload_buf[payload_idx++] = byte;
-    if (payload_idx == 4) {
+    if (payload_idx == expected_len) {
       handle_packet(current_cmd, payload_buf);
       parse_state = STATE_WAIT_CMD;
     }
@@ -205,7 +298,6 @@ void core1_main(void) {
   sleep_ms(10);
 
   static pio_usb_configuration_t config = PIO_USB_DEFAULT_CONFIG;
-  gpio_pull_up(config.pin_dp);
   init_string_desc();
   usb_device = pio_usb_device_init(&config, &desc);
   gpio_pull_up(config.pin_dp);
@@ -261,6 +353,7 @@ int main(void) {
     } else if (ep_kb && !ep_kb->is_tx && target_configured_notified) {
       printf("[FW_WARN] Target PC bus reset / disconnected!\r\n");
       stdio_flush();
+      clear_keyboard();
       target_configured_notified = false;
     }
 
@@ -276,6 +369,11 @@ int main(void) {
         break;
       }
       process_serial_byte((uint8_t)ch);
+    }
+
+    // Build and queue keyboard report if CMK key state changed
+    if (kbd_dirty) {
+      send_keyboard_report();
     }
 
     // Forward keyboard events (only pop from queue when transmission succeeds)
